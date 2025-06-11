@@ -12,7 +12,7 @@
 #include "Include\ConfigManager.mqh"
 #include "Include\TradingManager.mqh"
 #include "Include\UIManager.mqh"
-#include "Include\DatabaseManager.mqh"
+#include "Include\DatabaseManagerSimple.mqh"
 #include "Include\DrawingManager.mqh"
 
 //+------------------------------------------------------------------+
@@ -138,20 +138,43 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
             // Obsługa skrótów klawiszowych
             UI.HandleKeyPress(lparam);
             
-            // Specjalna obsługa klawisza H - export do bazy danych
+            // Specjalna obsługa klawisza H - export TYLKO pozycji do bazy danych
             if((int)lparam == 72) // Klawisz H
             {
                 if(Database.IsDatabaseReady())
                 {
+                    PrintDebug("=== ROZPOCZYNAM EKSPORT POZYCJI (klawisz H) ===");
                     Database.ExportHistoryPositionsToSQLite();
-                    Database.ExportAllSymbols();
+                    // Usunięto eksport świeczek - Database.ExportAllSymbols(); 
                     Database.PrintDatabaseStats();
                 }
                 else
                 {
                     LogError("Baza danych nie jest gotowa", "OnChartEvent");
+                    Database.TestDatabaseStatus();
                 }
             }
+            
+            // TEST: Klawisz R - odczyt ostatnich 3 pozycji
+            else if((int)lparam == 82) // Klawisz R
+            {
+                if(Database.IsDatabaseReady())
+                {
+                    Database.TestReadLastPositions();
+                }
+                else
+                {
+                    LogError("Baza danych nie jest gotowa", "OnChartEvent");
+                    Database.TestDatabaseStatus();
+                }
+            }
+            
+            // TEST: Klawisz G - status bazy danych (zmienione z D, żeby nie kolidowało)
+            else if((int)lparam == 71) // Klawisz G  
+            {
+                Database.TestDatabaseStatus();
+            }
+            
             break;
         }
     }

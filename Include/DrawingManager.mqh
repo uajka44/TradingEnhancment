@@ -28,8 +28,11 @@ public:
     {
         if(m_initialized) return true;
         
+        // Jednorazowe usunięcie istniejących linii SL/TP
+        CleanupExistingSLTPLines();
+        
         m_initialized = true;
-        PrintDebug("DrawingManager zainicjalizowany pomyślnie");
+        PrintDebug("DrawingManager zainicjalizowany pomyślnie (rysowanie SL/TP wyłączone)");
         return true;
     }
     
@@ -110,10 +113,15 @@ public:
     }
     
     //+------------------------------------------------------------------+
-    //| Oznaczenie poziomów SL/TP na wykresie                           |
+    //| Oznaczenie poziomów SL/TP na wykresie - USUNIĘTE                  |
     //+------------------------------------------------------------------+
     void MarkSLTPLevels()
     {
+        // FUNKCJA USUNIĘTA - nie rysuje już linii SL/TP
+        // PrintDebug("MarkSLTPLevels() - funkcja dezaktywowana");
+        return;
+        
+        /*
         // Usuń istniejące oznaczenia
         DeleteSLTPLevels();
         
@@ -151,13 +159,19 @@ public:
         {
             PrintDebug("Oznaczono poziomy SL/TP dla " + IntegerToString(positions_count) + " pozycji");
         }
+        */
     }
     
     //+------------------------------------------------------------------+
-    //| Usunięcie oznaczeń SL/TP                                       |
+    //| Usunięcie oznaczeń SL/TP - USUNIĘTE                          |
     //+------------------------------------------------------------------+
     void DeleteSLTPLevels()
     {
+        // FUNKCJA USUNIĘTA - nie usuwa już linii SL/TP
+        // PrintDebug("DeleteSLTPLevels() - funkcja dezaktywowana");
+        return;
+        
+        /*
         // Usuń wszystkie linie SL/TP
         for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
         {
@@ -166,6 +180,32 @@ public:
             {
                 ObjectDelete(0, obj_name);
             }
+        }
+        */
+    }
+    
+    //+------------------------------------------------------------------+
+    //| JEDNORAZOWE usunięcie istniejących linii SL/TP                  |
+    //+------------------------------------------------------------------+
+    void CleanupExistingSLTPLines()
+    {
+        int removed = 0;
+        
+        // Usuń wszystkie istniejące linie SL/TP
+        for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
+        {
+            string obj_name = ObjectName(0, i);
+            if(StringFind(obj_name, "SL_") == 0 || StringFind(obj_name, "TP_") == 0)
+            {
+                ObjectDelete(0, obj_name);
+                removed++;
+            }
+        }
+        
+        if(removed > 0)
+        {
+            ChartRedraw();
+            PrintDebug("Usunięto " + IntegerToString(removed) + " istniejących linii SL/TP");
         }
     }
     
@@ -226,14 +266,14 @@ public:
     //+------------------------------------------------------------------+
     void Cleanup()
     {
-        // Usuń poziomy SL/TP
-        DeleteSLTPLevels();
+        // WYKOMENTOWANE: Usuń poziomy SL/TP (funkcja już nie działa)
+        // DeleteSLTPLevels();
         
         // ZAKOMENTOWANE: Usuń overlay jeśli istnieje
         // DeleteOverlayOnLastCandle(); // <-- WYKOMENTOWANE NA CZAS TESTÓW
         
         m_initialized = false;
-        PrintDebug("DrawingManager: Cleanup completed");
+        PrintDebug("DrawingManager: Cleanup completed (SL/TP rysowanie wyłączone)");
     }
 };
 
