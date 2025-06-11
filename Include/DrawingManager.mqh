@@ -71,13 +71,20 @@ public:
     }
     
     //+------------------------------------------------------------------+
-    //| Usunięcie overlay z ostatniej świeczki                          |
+    //| Usunięcie overlay z ostatniej świeczki - ZAKOMENTOWANE        |
     //+------------------------------------------------------------------+
     void DeleteOverlayOnLastCandle(string name = "CandleCover")
     {
+        // FUNKCJA ZAKOMENTOWANA - SPRAWDZENIE CZY JEST WYWOŁYWANA
+        PrintDebug("UWAGA! DeleteOverlayOnLastCandle() została wywołana! - funkcja zakomentowana");
+        PlaySoundSafe("expert.wav"); // Dźwięk ostrzeżenia
+        return; // Nie wykonuj reszty funkcji
+        
+        
         ObjectDelete(0, name);
         ChartSetInteger(0, CHART_SHOW_BID_LINE, true);
         PrintDebug("Usunięto overlay ze świeczki");
+        
     }
     
     //+------------------------------------------------------------------+
@@ -222,8 +229,8 @@ public:
         // Usuń poziomy SL/TP
         DeleteSLTPLevels();
         
-        // Usuń overlay jeśli istnieje
-        DeleteOverlayOnLastCandle();
+        // ZAKOMENTOWANE: Usuń overlay jeśli istnieje
+        // DeleteOverlayOnLastCandle(); // <-- WYKOMENTOWANE NA CZAS TESTÓW
         
         m_initialized = false;
         PrintDebug("DrawingManager: Cleanup completed");
