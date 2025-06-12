@@ -67,7 +67,7 @@ public:
     }
     
     //+------------------------------------------------------------------+
-    //| Utworzenie tabeli                                               |
+    //| Utworzenie tabeli z dodatkowymi polami                          |
     //+------------------------------------------------------------------+
     bool CreateTables()
     {
@@ -75,14 +75,27 @@ public:
                           "position_id INTEGER PRIMARY KEY,"
                           "open_time INTEGER,"
                           "close_time INTEGER,"
+                          "ticket INTEGER,"
                           "type TEXT,"
                           "symbol TEXT,"
                           "volume REAL,"
                           "open_price REAL,"
                           "close_price REAL,"
+                          "sl REAL,"
+                          "tp REAL,"
+                          "commission REAL,"
+                          "swap REAL,"
                           "profit REAL,"
                           "profit_points INTEGER,"
-                          "duration TEXT"
+                          "balance REAL,"
+                          "magic_number INTEGER,"
+                          "duration TEXT,"
+                          "open_reason TEXT,"
+                          "close_reason TEXT,"
+                          "open_comment TEXT,"
+                          "close_comment TEXT,"
+                          "deal_in_ticket TEXT,"
+                          "deal_out_tickets TEXT"
                           ")";
         
         if(!DatabaseExecute(m_db_handle, createSQL))
@@ -207,7 +220,7 @@ public:
     }
     
     //+------------------------------------------------------------------+
-    //| Przetwarza jedną pozycję - SUPER PROSTO                         |
+    //| Przetwarza jedną pozycję - ROZSZERZONE o nowe pola            |
     //+------------------------------------------------------------------+
     bool ProcessSinglePositionSimple(long positionId)
     {
@@ -221,17 +234,26 @@ public:
         
         CDealInfo deal;
         
-        // Dane pozycji
-        string symbol = "";
-        long type = -1;
+        // Dane pozycji - WSZYSTKIE POLA
+        string symbol = "", open_comment = "", close_comment = "", deal_in_ticket = "", deal_out_ticket = "";
+        long type = -1, magic = 0, open_reason = -1, close_reason = -1;
         double volume = 0, open_price = 0, close_price = 0, profit = 0;
+        double commission = 0, swap = 0, sl = 0, tp = 0;
         datetime open_time = 0, close_time = 0;
         bool hasOpen = false, hasClose = false;
         
-        // Znajdź open i close
+        // STATYCZNA ZMIENNA do akumulacji balance (jak w oryginalnym kodzie)
+        static double running_balance = 0;
+        
+        // Znajdź open i close - ZBIERAJ WSZYSTKIE DANE
         for(int i = 0; i < deals; i++)
         {
             if(!deal.SelectByIndex(i)) continue;
+            
+            // Zbieraj commission i swap z każdej transakcji
+            commission += deal.Commission();
+            swap += deal.Swap();
+            profit += deal.Profit();
             
             if(deal.Entry() == DEAL_ENTRY_IN)
             {
@@ -241,13 +263,24 @@ public:
                 volume = deal.Volume();
                 open_price = deal.Price();
                 open_time = deal.Time();
+                magic = deal.Magic();
+                open_comment = deal.Comment();
+                deal_in_ticket = IntegerToString(deal.Ticket());
+                open_reason = HistoryDealGetInteger(deal.Ticket(), DEAL_REASON);
             }
             else if(deal.Entry() == DEAL_ENTRY_OUT || deal.Entry() == DEAL_ENTRY_OUT_BY)
             {
                 hasClose = true;
                 close_price = deal.Price();
                 close_time = deal.Time();
-                profit += deal.Profit();
+                close_comment = deal.Comment();
+                deal_out_ticket = IntegerToString(deal.Ticket());
+                close_reason = HistoryDealGetInteger(deal.Ticket(), DEAL_REASON);
+                // Pobierz aktualny balance konta
+                balance = AccountInfoDouble(ACCOUNT_BALANCE);
+                // Próbuj pobrać SL i TP z transakcji zamykającej
+                sl = HistoryDealGetDouble(deal.Ticket(), DEAL_SL);
+                tp = HistoryDealGetDouble(deal.Ticket(), DEAL_TP);
             }
         }
         
@@ -271,22 +304,44 @@ public:
         
         string duration = TimeElapsedToString(close_time - open_time);
         
-        // BEZPOŚREDNIE WYKONANIE SQL - BEZ PREPARED STATEMENTS
+        // Akumuluj balance (jak w oryginalnym kodzie)
+        running_balance += profit + swap + commission;
+        
+        // Konwertuj powody na stringi
+        string open_reason_str = DealReasonToString((ENUM_DEAL_REASON)open_reason);
+        string close_reason_str = DealReasonToString((ENUM_DEAL_REASON)close_reason);
+        
+        // BEZPOŚREDNIE WYKONANIE SQL - WSZYSTKIE POLA
         string directSQL = StringFormat(
             "INSERT OR IGNORE INTO positions "
-            "(position_id, open_time, close_time, type, symbol, volume, open_price, close_price, profit, profit_points, duration) "
-            "VALUES (%d, %d, %d, '%s', '%s', %.2f, %.5f, %.5f, %.2f, %d, '%s')",
+            "(position_id, open_time, close_time, ticket, type, symbol, volume, open_price, close_price, "
+            "sl, tp, commission, swap, profit, profit_points, balance, magic_number, duration, "
+            "open_reason, close_reason, open_comment, close_comment, deal_in_ticket, deal_out_tickets) "
+            "VALUES (%d, %d, %d, %d, '%s', '%s', %.2f, %.5f, %.5f, %.5f, %.5f, %.2f, %.2f, %.2f, %d, %.2f, %d, '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
             positionId,
             (long)open_time,
             (long)close_time,
+            positionId, // ticket = position_id
             (type == DEAL_TYPE_BUY) ? "buy" : "sell",
             symbol,
             volume,
             open_price,
             close_price,
+            sl,
+            tp,
+            commission,
+            swap,
             profit,
             points,
-            duration
+            running_balance,
+            magic,
+            duration,
+            open_reason_str,
+            close_reason_str,
+            open_comment,
+            close_comment,
+            deal_in_ticket,
+            deal_out_ticket
         );
         
         // Wykonaj bezpośrednio SQL
@@ -354,9 +409,9 @@ public:
             return true;
         }
         
-        // Ostatnie 3
+        // Ostatnie 3 - ROZSZERZONE
         int dataReq = DatabasePrepare(m_db_handle, 
-            "SELECT position_id, symbol, type, volume, profit, profit_points "
+            "SELECT position_id, ticket, symbol, type, volume, sl, tp, commission, swap, profit, profit_points "
             "FROM positions ORDER BY close_time DESC LIMIT 3");
         
         if(dataReq == INVALID_HANDLE)
@@ -369,20 +424,29 @@ public:
         while(DatabaseRead(dataReq))
         {
             count++;
-            long id, points;
+            long id, ticket, points;
             string symbol, type;
-            double volume, profit;
+            double volume, sl, tp, commission, swap, profit;
             
             DatabaseColumnLong(dataReq, 0, id);
-            DatabaseColumnText(dataReq, 1, symbol);
-            DatabaseColumnText(dataReq, 2, type);
-            DatabaseColumnDouble(dataReq, 3, volume);
-            DatabaseColumnDouble(dataReq, 4, profit);
-            DatabaseColumnLong(dataReq, 5, points);
+            DatabaseColumnLong(dataReq, 1, ticket);
+            DatabaseColumnText(dataReq, 2, symbol);
+            DatabaseColumnText(dataReq, 3, type);
+            DatabaseColumnDouble(dataReq, 4, volume);
+            DatabaseColumnDouble(dataReq, 5, sl);
+            DatabaseColumnDouble(dataReq, 6, tp);
+            DatabaseColumnDouble(dataReq, 7, commission);
+            DatabaseColumnDouble(dataReq, 8, swap);
+            DatabaseColumnDouble(dataReq, 9, profit);
+            DatabaseColumnLong(dataReq, 10, points);
             
-            PrintDebug("Pozycja " + IntegerToString(count) + ": ID=" + IntegerToString(id) + 
-                      ", " + symbol + " " + type + " " + DoubleToString(volume,2) + 
-                      ", profit=" + DoubleToString(profit,2) + " (" + IntegerToString(points) + "pkt)");
+            PrintDebug("=== POZYCJA " + IntegerToString(count) + " ===");
+            PrintDebug("ID: " + IntegerToString(id) + " | Ticket: " + IntegerToString(ticket));
+            PrintDebug("Symbol: " + symbol + " " + type + " " + DoubleToString(volume,2));
+            PrintDebug("SL: " + DoubleToString(sl,5) + " | TP: " + DoubleToString(tp,5));
+            PrintDebug("Commission: " + DoubleToString(commission,2) + " | Swap: " + DoubleToString(swap,2));
+            PrintDebug("Profit: " + DoubleToString(profit,2) + " (" + IntegerToString(points) + "pkt)");
+            PrintDebug("");
         }
         
         DatabaseFinalize(dataReq);
@@ -426,6 +490,28 @@ public:
     {
         const long days = seconds / 86400;
         return((days ? (string)days + "d " : "") + TimeToString(seconds, TIME_SECONDS));
+    }
+    
+    //+------------------------------------------------------------------+
+    //| Konwertuje DEAL_REASON na string                                |
+    //+------------------------------------------------------------------+
+    string DealReasonToString(ENUM_DEAL_REASON deal_reason)
+    {
+        switch(deal_reason)
+        {
+            case DEAL_REASON_CLIENT:   return ("client");
+            case DEAL_REASON_MOBILE:   return ("mobile");
+            case DEAL_REASON_WEB:      return ("web");
+            case DEAL_REASON_EXPERT:   return ("expert");
+            case DEAL_REASON_SL:       return ("sl");
+            case DEAL_REASON_TP:       return ("tp");
+            case DEAL_REASON_SO:       return ("so");
+            case DEAL_REASON_ROLLOVER: return ("rollover");
+            case DEAL_REASON_VMARGIN:  return ("vmargin");
+            case DEAL_REASON_SPLIT:    return ("split");
+            default:
+                return ("unknown");
+        }
     }
     
     void Cleanup()

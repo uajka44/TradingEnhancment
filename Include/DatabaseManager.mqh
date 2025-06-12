@@ -39,8 +39,8 @@ public:
         // Ścieżka do bazy danych
         m_db_path = "multi_candles.db";
         
-        // Otwórz lub utwórz bazę danych z natywnym SQLite MT5
-        m_db_handle = DatabaseOpen(m_db_path, DATABASE_OPEN_READWRITE | DATABASE_OPEN_CREATE | DATABASE_OPEN_COMMON);
+        // Otwórz lub utwórz bazę danych w katalogu terminala (bez flagi COMMON)
+        m_db_handle = DatabaseOpen(m_db_path, DATABASE_OPEN_READWRITE | DATABASE_OPEN_CREATE);
         
         if(m_db_handle == INVALID_HANDLE)
         {
@@ -417,407 +417,144 @@ public:
         return (insertedCount > 0); // Sukces jeśli choć jedna pozycja się udała
     }
     
-    //+------------------------------------------------------------------+
-    //| Przetwarza pojedynczą pozycję w osobnej transakcji              |
-    //+------------------------------------------------------------------+
-    bool ProcessSinglePositionWithTransaction(long positionId)
-    {
-        // Rozpocznij osobną transakcję dla tej pozycji
-        if(!DatabaseExecute(m_db_handle, "BEGIN TRANSACTION"))
-        {
-            LogError("Błąd przy rozpoczynaniu transakcji dla pozycji " + IntegerToString(positionId) + ": " + IntegerToString(GetLastError()), "ProcessSinglePositionWithTransaction");
-            return false;
-        }
-        
-        // Przygotuj zapytanie INSERT dla tej pozycji
-        string insertSQL = "INSERT OR IGNORE INTO positions "
-                          "(position_id, open_time, ticket, type, volume, symbol, open_price, sl, tp, "
-                          "close_time, close_price, commission, swap, profit, profit_points, "
-                          "magic_number, duration, open_reason, close_reason, open_comment, close_comment, "
-                          "deal_in_ticket, deal_out_tickets) "
-                          "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-        
-        int insertRequest = DatabasePrepare(m_db_handle, insertSQL);
-        
-        if(insertRequest == INVALID_HANDLE)
-        {
-            LogError("Błąd przy przygotowaniu INSERT dla pozycji " + IntegerToString(positionId) + ": " + IntegerToString(GetLastError()), "ProcessSinglePositionWithTransaction");
-            DatabaseExecute(m_db_handle, "ROLLBACK");
-            return false;
-        }
-        
-        // Przetwórz pozycję
-        bool success = ProcessPositionForExport(positionId, insertRequest);
-        
-        // Sfinalizuj zapytanie
-        DatabaseFinalize(insertRequest);
-        
-        if(success)
-        {
-            // Zatwierdź transakcję
-            if(!DatabaseExecute(m_db_handle, "COMMIT"))
-            {
-                LogError("Błąd przy zatwierdzaniu transakcji dla pozycji " + IntegerToString(positionId) + ": " + IntegerToString(GetLastError()), "ProcessSinglePositionWithTransaction");
-                DatabaseExecute(m_db_handle, "ROLLBACK");
-                return false;
-            }
-            return true;
-        }
-        else
-        {
-            // Wycofaj transakcję w przypadku błędu
-            DatabaseExecute(m_db_handle, "ROLLBACK");
-            return false;
-        }
-    }
+
     
     //+------------------------------------------------------------------+
-    //| Przetwarza pojedynczą pozycję w osobnej transakcji              |
+    //| Przetwarza pojedynczą pozycję - UPROSZCZONE bez transakcji     |
     //+------------------------------------------------------------------+
     bool ProcessSinglePositionWithTransaction(long positionId)
     {
-        // Rozpocznij osobną transakcję dla tej pozycji
-        if(!DatabaseExecute(m_db_handle, "BEGIN TRANSACTION"))
-        {
-            LogError("Błąd przy rozpoczynaniu transakcji dla pozycji " + IntegerToString(positionId) + ": " + IntegerToString(GetLastError()), "ProcessSinglePositionWithTransaction");
-            return false;
-        }
+        // USUWAMY TRANSAKCJE - robimy PROSTO jak w Simple
+        PrintDebug("Przetwarzanie pozycji: " + IntegerToString(positionId));
         
-        // Przygotuj zapytanie INSERT dla tej pozycji
-        string insertSQL = "INSERT OR IGNORE INTO positions "
-                          "(position_id, open_time, ticket, type, volume, symbol, open_price, sl, tp, "
-                          "close_time, close_price, commission, swap, profit, profit_points, "
-                          "magic_number, duration, open_reason, close_reason, open_comment, close_comment, "
-                          "deal_in_ticket, deal_out_tickets) "
-                          "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-        
-        int insertRequest = DatabasePrepare(m_db_handle, insertSQL);
-        
-        if(insertRequest == INVALID_HANDLE)
-        {
-            LogError("Błąd przy przygotowaniu INSERT dla pozycji " + IntegerToString(positionId) + ": " + IntegerToString(GetLastError()), "ProcessSinglePositionWithTransaction");
-            DatabaseExecute(m_db_handle, "ROLLBACK");
-            return false;
-        }
-        
-        // Przetwórz pozycję
-        bool success = ProcessPositionForExport(positionId, insertRequest);
-        
-        // Sfinalizuj zapytanie
-        DatabaseFinalize(insertRequest);
-        
-        if(success)
-        {
-            // Zatwierdź transakcję
-            if(!DatabaseExecute(m_db_handle, "COMMIT"))
-            {
-                LogError("Błąd przy zatwierdzaniu transakcji dla pozycji " + IntegerToString(positionId) + ": " + IntegerToString(GetLastError()), "ProcessSinglePositionWithTransaction");
-                DatabaseExecute(m_db_handle, "ROLLBACK");
-                return false;
-            }
-            return true;
-        }
-        else
-        {
-            // Wycofaj transakcję w przypadku błędu
-            DatabaseExecute(m_db_handle, "ROLLBACK");
-            return false;
-        }
-    }
-    bool ProcessPositionForExport(long positionId, int insertRequest)
-    {
         if(!HistorySelectByPosition(positionId))
         {
-            LogError("Nie można wybrać historii dla pozycji: " + IntegerToString(positionId), "ProcessPositionForExport");
             return false;
         }
-            
+        
         int deals = HistoryDealsTotal();
-        if(deals < 2) // Pozycja musi mieć minimum open i close
-        {
-            PrintDebug("Pozycja " + IntegerToString(positionId) + " ma tylko " + IntegerToString(deals) + " transakcji - pomijamy");
-            return false;
-        }
-            
+        if(deals < 2) return false; // Musi mieć open i close
+        
         CDealInfo deal;
         
-        // Dane pozycji - inicjalizacja domyślnymi wartościami
-        long pos_id = positionId;
-        string pos_symbol = "";
-        long pos_type = -1;
-        long pos_magic = -1;
-        double pos_open_price = 0;
-        double pos_close_price = 0;
-        double pos_sl = 0;
-        double pos_tp = 0;
-        double pos_commission = 0;
-        double pos_swap = 0;
-        double pos_profit = 0;
-        double pos_volume = 0;
-        datetime pos_open_time = 0;
-        datetime pos_close_time = 0;
-        string pos_open_comment = "";
-        string pos_close_comment = "";
-        string pos_deal_in = "";
-        string pos_deal_out = "";
-        long pos_open_reason = -1;
-        long pos_close_reason = -1;
-        
-        bool hasEntry = false;
-        bool hasExit = false;
+        // Dane pozycji
+        string symbol = "";
+        long type = -1;
+        double volume = 0, open_price = 0, close_price = 0, profit = 0;
+        double commission = 0, swap = 0, sl = 0, tp = 0;
+        datetime open_time = 0, close_time = 0;
+        long magic = 0;
+        string open_comment = "", close_comment = "";
+        bool hasOpen = false, hasClose = false;
         
         // Zbierz dane z transakcji
         for(int i = 0; i < deals; i++)
         {
-            if(!deal.SelectByIndex(i))
-                continue;
-                
-            pos_symbol = deal.Symbol();
-            pos_commission += deal.Commission();
-            pos_swap += deal.Swap();
-            pos_profit += deal.Profit();
+            if(!deal.SelectByIndex(i)) continue;
+            
+            symbol = deal.Symbol();
+            commission += deal.Commission();
+            swap += deal.Swap();
+            profit += deal.Profit();
             
             if(deal.Entry() == DEAL_ENTRY_IN)
             {
-                hasEntry = true;
-                pos_magic = deal.Magic();
-                pos_type = deal.DealType();
-                pos_open_time = deal.Time();
-                pos_open_price = deal.Price();
-                pos_volume = deal.Volume();
-                pos_open_comment = deal.Comment();
-                pos_deal_in = IntegerToString(deal.Ticket());
-                pos_open_reason = HistoryDealGetInteger(deal.Ticket(), DEAL_REASON);
+                hasOpen = true;
+                magic = deal.Magic();
+                type = deal.DealType();
+                open_time = deal.Time();
+                open_price = deal.Price();
+                volume = deal.Volume();
+                open_comment = deal.Comment();
             }
             else if(deal.Entry() == DEAL_ENTRY_OUT || deal.Entry() == DEAL_ENTRY_OUT_BY)
             {
-                hasExit = true;
-                pos_close_time = deal.Time();
-                pos_close_price = deal.Price();
-                pos_sl = HistoryDealGetDouble(deal.Ticket(), DEAL_SL);
-                pos_tp = HistoryDealGetDouble(deal.Ticket(), DEAL_TP);
-                pos_close_comment = deal.Comment();
-                pos_deal_out = IntegerToString(deal.Ticket());
-                pos_close_reason = HistoryDealGetInteger(deal.Ticket(), DEAL_REASON);
+                hasClose = true;
+                close_time = deal.Time();
+                close_price = deal.Price();
+                sl = HistoryDealGetDouble(deal.Ticket(), DEAL_SL);
+                tp = HistoryDealGetDouble(deal.Ticket(), DEAL_TP);
+                close_comment = deal.Comment();
             }
         }
         
-        // Sprawdź czy pozycja jest kompletna
-        if(!hasEntry)
+        // Sprawdź kompletność
+        if(!hasOpen || !hasClose || open_time == 0 || close_time == 0)
         {
-            PrintDebug("Pozycja " + IntegerToString(positionId) + " nie ma transakcji wejściowej - pomijamy");
             return false;
         }
         
-        if(!hasExit)
+        // Oblicz punkty
+        int points = 0;
+        if(symbol != "")
         {
-            PrintDebug("Pozycja " + IntegerToString(positionId) + " jest nadal otwarta - pomijamy");
-            return false;
-        }
-        
-        if(pos_open_time == 0 || pos_close_time == 0)
-        {
-            LogError("Pozycja " + IntegerToString(positionId) + " ma nieprawidłowe czasy", "ProcessPositionForExport");
-            return false;
-        }
-            
-        // Oblicz profit w punktach
-        int profit_points = 0;
-        if(pos_symbol != "")
-        {
-            SymbolSelect(pos_symbol, true);
-            double point = SymbolInfoDouble(pos_symbol, SYMBOL_POINT);
+            SymbolSelect(symbol, true);
+            double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
             if(point > 0)
             {
-                profit_points = (int)MathRound((pos_type == DEAL_TYPE_BUY ? pos_close_price - pos_open_price : pos_open_price - pos_close_price) / point);
+                points = (int)MathRound((type == DEAL_TYPE_BUY ? close_price - open_price : open_price - close_price) / point);
             }
         }
         
-        // Oblicz czas trwania pozycji
-        string duration = TimeElapsedToString(pos_close_time - pos_open_time);
+        string duration = TimeElapsedToString(close_time - open_time);
         
-        // SZCZEGÓŁOWE LOGOWANIE PRZED BIND
-        PrintDebug("Przygotowywanie pozycji " + IntegerToString(pos_id) + " do zapisu:");
-        PrintDebug("  Symbol: " + pos_symbol + ", Typ: " + (pos_type == DEAL_TYPE_BUY ? "BUY" : "SELL"));
-        PrintDebug("  Volume: " + DoubleToString(pos_volume, 2) + ", Profit: " + DoubleToString(pos_profit, 2));
-        PrintDebug("  Open: " + TimeToString(pos_open_time) + " @ " + DoubleToString(pos_open_price, 5));
-        PrintDebug("  Close: " + TimeToString(pos_close_time) + " @ " + DoubleToString(pos_close_price, 5));
+        // DEBUG: Wyświetl zebrane dane przed zapisem
+        PrintDebug("=== DANE DO ZAPISU ====");
+        PrintDebug("Position ID: " + IntegerToString(positionId));
+        PrintDebug("Symbol: " + symbol);
+        PrintDebug("Type: " + ((type == DEAL_TYPE_BUY) ? "BUY" : "SELL"));
+        PrintDebug("Volume: " + DoubleToString(volume, 2));
+        PrintDebug("Open Price: " + DoubleToString(open_price, 5));
+        PrintDebug("Close Price: " + DoubleToString(close_price, 5));
+        PrintDebug("SL: " + DoubleToString(sl, 5) + " (" + (sl > 0 ? "SET" : "NOT SET") + ")");
+        PrintDebug("TP: " + DoubleToString(tp, 5) + " (" + (tp > 0 ? "SET" : "NOT SET") + ")");
+        PrintDebug("Commission: " + DoubleToString(commission, 2));
+        PrintDebug("Swap: " + DoubleToString(swap, 2));
+        PrintDebug("Profit: " + DoubleToString(profit, 2));
+        PrintDebug("Points: " + IntegerToString(points));
+        PrintDebug("Magic: " + IntegerToString(magic));
+        PrintDebug("Duration: " + duration);
+        PrintDebug("Open Comment: '" + open_comment + "'");
+        PrintDebug("Close Comment: '" + close_comment + "'");
+        PrintDebug("==================");
         
-        // Sprawdź czy request jest prawidłowy przed bind
-        if(insertRequest == INVALID_HANDLE)
+        // BEZPOŚREDNIE SQL - tylko podstawowe pola które na pewno istnieją
+        string directSQL = StringFormat(
+            "INSERT OR IGNORE INTO positions "
+            "(position_id, open_time, ticket, type, volume, symbol, open_price, sl, tp, "
+            "close_time, close_price, commission, swap, profit, profit_points, "
+            "magic_number, duration, open_comment, close_comment) "
+            "VALUES (%d, %d, %d, '%s', %.2f, '%s', %.5f, %.5f, %.5f, %d, %.5f, %.2f, %.2f, %.2f, %d, %d, '%s', '%s', '%s')",
+            positionId,
+            (long)open_time,
+            positionId, // ticket = position_id
+            (type == DEAL_TYPE_BUY) ? "buy" : "sell",
+            volume,
+            symbol,
+            open_price,
+            sl,
+            tp,
+            (long)close_time,
+            close_price,
+            commission,
+            swap,
+            profit,
+            points,
+            magic,
+            duration,
+            open_comment,
+            close_comment
+        );
+        
+        // Wykonaj BEZPOŚREDNIO - jak w Simple
+        if(!DatabaseExecute(m_db_handle, directSQL))
         {
-            LogError("InsertRequest jest nieprawidłowy dla pozycji " + IntegerToString(pos_id), "ProcessPositionForExport");
             return false;
         }
         
-        // Resetuj zapytanie
-        if(!DatabaseReset(insertRequest))
-        {
-            LogError("Błąd DatabaseReset dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        // Przypisz wartości do zapytania z sprawdzaniem każdego bind
-        if(!DatabaseBind(insertRequest, 0, (long)pos_id))
-        {
-            LogError("Błąd bind 0 (position_id) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 1, (long)pos_open_time))
-        {
-            LogError("Błąd bind 1 (open_time) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 2, (long)pos_id)) // ticket = position_id
-        {
-            LogError("Błąd bind 2 (ticket) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 3, (pos_type == DEAL_TYPE_BUY) ? "buy" : "sell"))
-        {
-            LogError("Błąd bind 3 (type) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 4, pos_volume))
-        {
-            LogError("Błąd bind 4 (volume) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 5, pos_symbol))
-        {
-            LogError("Błąd bind 5 (symbol) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 6, pos_open_price))
-        {
-            LogError("Błąd bind 6 (open_price) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 7, pos_sl > 0 ? pos_sl : 0))
-        {
-            LogError("Błąd bind 7 (sl) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 8, pos_tp > 0 ? pos_tp : 0))
-        {
-            LogError("Błąd bind 8 (tp) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 9, (long)pos_close_time))
-        {
-            LogError("Błąd bind 9 (close_time) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 10, pos_close_price))
-        {
-            LogError("Błąd bind 10 (close_price) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 11, pos_commission))
-        {
-            LogError("Błąd bind 11 (commission) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 12, pos_swap))
-        {
-            LogError("Błąd bind 12 (swap) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 13, pos_profit))
-        {
-            LogError("Błąd bind 13 (profit) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 14, profit_points))
-        {
-            LogError("Błąd bind 14 (profit_points) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 15, pos_magic))
-        {
-            LogError("Błąd bind 15 (magic_number) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 16, duration))
-        {
-            LogError("Błąd bind 16 (duration) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 17, DealReasonToString((ENUM_DEAL_REASON)pos_open_reason)))
-        {
-            LogError("Błąd bind 17 (open_reason) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 18, DealReasonToString((ENUM_DEAL_REASON)pos_close_reason)))
-        {
-            LogError("Błąd bind 18 (close_reason) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 19, pos_open_comment))
-        {
-            LogError("Błąd bind 19 (open_comment) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 20, pos_close_comment))
-        {
-            LogError("Błąd bind 20 (close_comment) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 21, pos_deal_in))
-        {
-            LogError("Błąd bind 21 (deal_in_ticket) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        if(!DatabaseBind(insertRequest, 22, pos_deal_out))
-        {
-            LogError("Błąd bind 22 (deal_out_tickets) dla pozycji " + IntegerToString(pos_id) + ": " + IntegerToString(GetLastError()), "ProcessPositionForExport");
-            return false;
-        }
-        
-        PrintDebug("Wszystkie bind operacje zakończone pomyślnie dla pozycji " + IntegerToString(pos_id));
-        
-        // Wykonaj zapytanie z dodatkowym sprawdzeniem
-        if(!DatabaseRead(insertRequest))
-        {
-            int lastError = GetLastError();
-            LogError("Błąd podczas DatabaseRead dla pozycji ID=" + IntegerToString(pos_id) + ": " + IntegerToString(lastError), "ProcessPositionForExport");
-            
-            // Dodatkowe informacje o błędzie
-            if(lastError == 5126)
-            {
-                LogError("SQLITE_CANTOPEN - Problem z dostępem do bazy danych", "ProcessPositionForExport");
-                LogError("Sprawdź czy baza nie jest zablokowana przez inny proces", "ProcessPositionForExport");
-            }
-            
-            return false;
-        }
-        
-        PrintDebug("✓ Pozycja " + IntegerToString(pos_id) + " zapisana pomyślnie");
         return true;
     }
-    
+
     //+------------------------------------------------------------------+
     //| Konwertuje czas na czytelny string                              |
     //+------------------------------------------------------------------+
@@ -940,9 +677,9 @@ public:
             return true;
         }
         
-        // Pobierz ostatnie 3 pozycje (sortowane po close_time)
-        string querySQL = "SELECT position_id, open_time, close_time, type, symbol, volume, "
-                         "open_price, close_price, profit, profit_points, duration, "
+        // Pobierz ostatnie 3 pozycje - tylko pola które są w INSERT
+        string querySQL = "SELECT position_id, ticket, sl, tp, commission, swap, open_time, close_time, type, symbol, volume, "
+                         "open_price, close_price, profit, profit_points, duration, magic_number, "
                          "open_comment, close_comment "
                          "FROM positions "
                          "ORDER BY close_time DESC "
@@ -963,38 +700,46 @@ public:
         {
             rowCount++;
             
-            // Pobierz dane z kolumn
-            long position_id, open_time, close_time;
+            // Pobierz dane z kolumn - NOWA KOLEJNOŚĆ
+            long position_id, ticket, open_time, close_time, magic_number;
+            double sl, tp, commission, swap, volume, open_price, close_price, profit;
             string type, symbol, duration, open_comment, close_comment;
-            double volume, open_price, close_price, profit;
             long profit_points;
             
             DatabaseColumnLong(queryRequest, 0, position_id);
-            DatabaseColumnLong(queryRequest, 1, open_time);
-            DatabaseColumnLong(queryRequest, 2, close_time);
-            DatabaseColumnText(queryRequest, 3, type);
-            DatabaseColumnText(queryRequest, 4, symbol);
-            DatabaseColumnDouble(queryRequest, 5, volume);
-            DatabaseColumnDouble(queryRequest, 6, open_price);
-            DatabaseColumnDouble(queryRequest, 7, close_price);
-            DatabaseColumnDouble(queryRequest, 8, profit);
-            DatabaseColumnLong(queryRequest, 9, profit_points);
-            DatabaseColumnText(queryRequest, 10, duration);
-            DatabaseColumnText(queryRequest, 11, open_comment);
-            DatabaseColumnText(queryRequest, 12, close_comment);
+            DatabaseColumnLong(queryRequest, 1, ticket);
+            DatabaseColumnDouble(queryRequest, 2, sl);
+            DatabaseColumnDouble(queryRequest, 3, tp);
+            DatabaseColumnDouble(queryRequest, 4, commission);
+            DatabaseColumnDouble(queryRequest, 5, swap);
+            DatabaseColumnLong(queryRequest, 6, open_time);
+            DatabaseColumnLong(queryRequest, 7, close_time);
+            DatabaseColumnText(queryRequest, 8, type);
+            DatabaseColumnText(queryRequest, 9, symbol);
+            DatabaseColumnDouble(queryRequest, 10, volume);
+            DatabaseColumnDouble(queryRequest, 11, open_price);
+            DatabaseColumnDouble(queryRequest, 12, close_price);
+            DatabaseColumnDouble(queryRequest, 13, profit);
+            DatabaseColumnLong(queryRequest, 14, profit_points);
+            DatabaseColumnText(queryRequest, 15, duration);
+            DatabaseColumnLong(queryRequest, 16, magic_number);
+            DatabaseColumnText(queryRequest, 17, open_comment);
+            DatabaseColumnText(queryRequest, 18, close_comment);
             
-            // Wyświetl dane pozycji
+            // Wyświetl dane pozycji - Z DODATKOWYMI POLAMI
             PrintDebug("--- POZYCJA " + IntegerToString(rowCount) + " ---");
-            PrintDebug("ID: " + IntegerToString(position_id));
-            PrintDebug("Symbol: " + symbol);
-            PrintDebug("Typ: " + type);
+            PrintDebug("Position ID: " + IntegerToString(position_id));
+            PrintDebug("Ticket: " + IntegerToString(ticket));
+            PrintDebug("Symbol: " + symbol + " (" + type + ")");
             PrintDebug("Volume: " + DoubleToString(volume, 2));
             PrintDebug("Otwarcie: " + TimeToString((datetime)open_time) + " @ " + DoubleToString(open_price, 5));
             PrintDebug("Zamknięcie: " + TimeToString((datetime)close_time) + " @ " + DoubleToString(close_price, 5));
+            PrintDebug("SL: " + DoubleToString(sl, 5) + " | TP: " + DoubleToString(tp, 5));
+            PrintDebug("Commission: " + DoubleToString(commission, 2) + " | Swap: " + DoubleToString(swap, 2));
             PrintDebug("Profit: " + DoubleToString(profit, 2) + " USD (" + IntegerToString(profit_points) + " pkt)");
-            PrintDebug("Czas trwania: " + duration);
-            if(open_comment != "") PrintDebug("Komentarz otwarcia: " + open_comment);
-            if(close_comment != "") PrintDebug("Komentarz zamknięcia: " + close_comment);
+            PrintDebug("Magic: " + IntegerToString(magic_number) + " | Czas trwania: " + duration);
+            if(open_comment != "") PrintDebug("Komentarz otwarcia: '" + open_comment + "'");
+            if(close_comment != "") PrintDebug("Komentarz zamknięcia: '" + close_comment + "'");
             PrintDebug("");
         }
         
