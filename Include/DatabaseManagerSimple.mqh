@@ -238,7 +238,7 @@ public:
         string symbol = "", open_comment = "", close_comment = "", deal_in_ticket = "", deal_out_ticket = "";
         long type = -1, magic = 0, open_reason = -1, close_reason = -1;
         double volume = 0, open_price = 0, close_price = 0, profit = 0;
-        double commission = 0, swap = 0, sl = 0, tp = 0;
+        double commission = 0, swap = 0, sl = 0, tp = 0, balance = 0; // Dodana zmienna balance
         datetime open_time = 0, close_time = 0;
         bool hasOpen = false, hasClose = false;
         
