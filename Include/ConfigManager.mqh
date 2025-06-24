@@ -149,10 +149,7 @@ public:
     void LoadPrzerwaDo()
     {
         przerwa_do = ReadDateFromCSVSafe(przerwa_filename);
-        if(przerwa_do > 0)
-        {
-            PrintDebug("Wczytano datę przerwy: " + TimeToString(przerwa_do));
-        }
+        // Usunięto debug print - wyświetlany będzie tylko w statusie EA
     }
     
     //+------------------------------------------------------------------+
@@ -162,6 +159,16 @@ public:
     {
         LoadPrzerwaDo(); // Odświeżamy datę z pliku
         return (przerwa_do > TimeCurrent());
+    }
+    
+    //+------------------------------------------------------------------+
+    //| Pobiera datę przerwy dla wyświetlenia w statusie                 |
+    //+------------------------------------------------------------------+
+    string GetPrzerrwaDoString()
+    {
+        if(przerwa_do > 0)
+            return TimeToString(przerwa_do, TIME_DATE|TIME_MINUTES);
+        return "Brak";
     }
     
     //+------------------------------------------------------------------+

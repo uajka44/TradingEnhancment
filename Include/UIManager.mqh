@@ -385,9 +385,12 @@ public:
         info += "Setup: " + Config.GetCurrentSetup() + "\n";
         info += "Tryb rysowania: " + BoolToString(Config.GetDrawingMode()) + "\n";
         info += "Trading zablokowany: " + BoolToString(Config.IsTradingBlocked()) + "\n";
+        info += "Data przerwy: " + Config.GetPrzerrwaDoString() + "\n";
         info += "\n" + Trading.GetPositionsInfo();
         
         Comment(info);
+        // Uwaga: Rozmiar czcionki komentarza można zmienić tylko ręcznie w ustawieniach MT5
+        // Properties -> Fonts -> Comments -> Font Size
     }
     
     //+------------------------------------------------------------------+
