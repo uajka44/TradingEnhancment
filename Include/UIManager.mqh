@@ -56,12 +56,12 @@ public:
     //+------------------------------------------------------------------+
     void CreateButtons()
     {
-        // Przyciski rozmiaru pozycji
-        CreateButton("Button1", "0.1", button_x_start, button_y_position, clrDarkGray);
+        // Przyciski rozmiaru pozycji - używamy wartości z parametrów input
+        CreateButton("Button1", DoubleToStringFormatted(Config.GetDefaultSize()), button_x_start, button_y_position, clrDarkGray);
         ObjectSetInteger(0, "Button1", OBJPROP_STATE, 1); // Domyślnie aktywny
         
-        CreateButton("Button2", "0.1", button_x_start + button_spacing, button_y_position, clrDarkGray);
-        CreateButton("Button3", "2.0", button_x_start + button_spacing * 2, button_y_position, clrDarkGray);
+        CreateButton("Button2", DoubleToStringFormatted(Config.GetButton2Size()), button_x_start + button_spacing, button_y_position, clrDarkGray);
+        CreateButton("Button3", DoubleToStringFormatted(Config.GetButton3Size()), button_x_start + button_spacing * 2, button_y_position, clrDarkGray);
         
         // Przycisk Break Even
         CreateButton("Button_BE", "BE", button_x_start + button_spacing * 3, button_y_position, clrLightBlue);
@@ -105,21 +105,21 @@ public:
     {
         if(buttonName == "Button1")
         {
-            Config.SetPositionSize(0.1);
+            Config.SetPositionSize(Config.GetDefaultSize());
             SetActiveButton("Button1");
-            PrintDebug("Ustawiono rozmiar pozycji: Button1");
+            PrintDebug("Ustawiono rozmiar pozycji: Button1 (" + DoubleToStringFormatted(Config.GetDefaultSize()) + ")");
         }
         else if(buttonName == "Button2")
         {
-            Config.SetPositionSize(0.1);
+            Config.SetPositionSize(Config.GetButton2Size());
             SetActiveButton("Button2");
-            PrintDebug("Ustawiono rozmiar pozycji: Button2");
+            PrintDebug("Ustawiono rozmiar pozycji: Button2 (" + DoubleToStringFormatted(Config.GetButton2Size()) + ")");
         }
         else if(buttonName == "Button3")
         {
-            Config.SetPositionSize(2.0);
+            Config.SetPositionSize(Config.GetButton3Size());
             SetActiveButton("Button3");
-            PrintDebug("Ustawiono rozmiar pozycji: Button3");
+            PrintDebug("Ustawiono rozmiar pozycji: Button3 (" + DoubleToStringFormatted(Config.GetButton3Size()) + ")");
         }
         else if(buttonName == "Button_BE")
         {
@@ -268,14 +268,14 @@ public:
                 
             // Klawisz 2 - ustawienie rozmiaru pozycji i aktywacja
             case 50:
-                Config.SetPositionSize(0.1);
+                Config.SetPositionSize(Config.GetButton2Size());
                 SetActiveButton("Button2");
                 Config.SetTakeAction(true, "Size2");
                 break;
                 
             // Klawisz 3 - ustawienie rozmiaru pozycji i aktywacja
             case 51:
-                Config.SetPositionSize(2.0);
+                Config.SetPositionSize(Config.GetButton3Size());
                 SetActiveButton("Button3");
                 Config.SetTakeAction(true, "Size3");
                 break;
@@ -394,10 +394,23 @@ public:
     }
     
     //+------------------------------------------------------------------+
+    //| Aktualizacja etykiet przycisków zgodnie z parametrami input       |
+    //+------------------------------------------------------------------+
+    void UpdateButtonLabels()
+    {
+        ObjectSetString(0, "Button1", OBJPROP_TEXT, DoubleToStringFormatted(Config.GetDefaultSize()));
+        ObjectSetString(0, "Button2", OBJPROP_TEXT, DoubleToStringFormatted(Config.GetButton2Size()));
+        ObjectSetString(0, "Button3", OBJPROP_TEXT, DoubleToStringFormatted(Config.GetButton3Size()));
+    }
+    
+    //+------------------------------------------------------------------+
     //| Aktualizacja interfejsu (wywoływana regularnie)                 |
     //+------------------------------------------------------------------+
     void UpdateInterface()
     {
+        // Aktualizuj etykiety przycisków (ważne dla nowych parametrów input)
+        UpdateButtonLabels();
+        
         // Aktualizuj status
         ShowStatusInfo();
         

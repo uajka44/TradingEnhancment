@@ -99,7 +99,7 @@ public:
         if(m_initialized) return true;
         
         // Inicjalizacja zmiennych globalnych
-        position_size = default_size;
+        position_size = default_size; // Ustaw domyślny rozmiar z parametru input
         take_action = false;
         setup = "";
         przerwa_do = 0;
@@ -189,6 +189,13 @@ public:
     double GetPositionSize() { return position_size; }
     
     //+------------------------------------------------------------------+
+    //| Pobranie rozmiarów pozycji dla przycisków                        |
+    //+------------------------------------------------------------------+
+    double GetButton2Size() { return button2_size; }
+    double GetButton3Size() { return button3_size; }
+    double GetDefaultSize() { return default_size; }
+    
+    //+------------------------------------------------------------------+
     //| Pobranie rozmiaru pozycji dla zleceń market                      |
     //+------------------------------------------------------------------+
     double GetMarketPositionSize() 
@@ -276,7 +283,7 @@ public:
     {
         PrintDebug("=== KONFIGURACJA EA ===");
         PrintDebug("SL/TP: " + IntegerToString(sl) + "/" + IntegerToString(tp));
-        PrintDebug("Rozmiary pozycji: " + DoubleToStringFormatted(default_size) + 
+        PrintDebug("Rozmiary pozycji (1/2/3): " + DoubleToStringFormatted(default_size) + 
                   "/" + DoubleToStringFormatted(button2_size) + 
                   "/" + DoubleToStringFormatted(button3_size));
         PrintDebug("Mnożnik market: " + DoubleToStringFormatted(market_order_size_multiplier));
