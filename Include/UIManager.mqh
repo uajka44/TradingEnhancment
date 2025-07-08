@@ -18,6 +18,12 @@ class CUIManager
 private:
     bool m_initialized;
     bool keyBPressed;
+    datetime lastButtonClickTime; // DODAJ - czas ostatniego kliknięcia przycisku
+    
+    // Zmienne do zapamiętania poprzedniego stanu przed użyciem przycisku 007
+    double previousPositionSize;
+    int previousMagicNumber;
+    string previousActiveButton;
     
     // Pozycje przycisków
     int button_x_start;
@@ -27,7 +33,8 @@ private:
     int button_spacing;
     
 public:
-    CUIManager() : m_initialized(false), keyBPressed(false) {}
+    CUIManager() : m_initialized(false), keyBPressed(false), lastButtonClickTime(0),
+                   previousPositionSize(0), previousMagicNumber(0), previousActiveButton("") {} // DODAJ inicjalizację
     ~CUIManager() {}
     
     //+------------------------------------------------------------------+
@@ -63,8 +70,11 @@ public:
         CreateButton("Button2", DoubleToStringFormatted(Config.GetButton2Size()), button_x_start + button_spacing, button_y_position, clrDarkGray);
         CreateButton("Button3", DoubleToStringFormatted(Config.GetButton3Size()), button_x_start + button_spacing * 2, button_y_position, clrDarkGray);
         
-        // Przycisk Break Even
-        CreateButton("Button_BE", "BE", button_x_start + button_spacing * 3, button_y_position, clrLightBlue);
+        // NOWY PRZYCISK 007
+        CreateButton("Button_007", "?? " + DoubleToStringFormatted(Config.GetButton007Size()), button_x_start + button_spacing * 3, button_y_position, clrGold);
+        
+        // Przycisk Break Even (przesunięty o jedną pozycję)
+        CreateButton("Button_BE", "BE", button_x_start + button_spacing * 4, button_y_position, clrLightBlue);
         
         PrintDebug("Utworzono przyciski interfejsu");
     }
@@ -103,29 +113,63 @@ public:
     //+------------------------------------------------------------------+
     void HandleButtonClick(string buttonName)
     {
+        lastButtonClickTime = TimeCurrent(); // DODAJ - zapisz czas kliknięcia
+        
         if(buttonName == "Button1")
         {
             Config.SetPositionSize(Config.GetDefaultSize());
+            Config.SetMagicNumber(0); // Resetuj magic number
             SetActiveButton("Button1");
             PrintDebug("Ustawiono rozmiar pozycji: Button1 (" + DoubleToStringFormatted(Config.GetDefaultSize()) + ")");
         }
         else if(buttonName == "Button2")
         {
             Config.SetPositionSize(Config.GetButton2Size());
+            Config.SetMagicNumber(0); // Resetuj magic number
             SetActiveButton("Button2");
             PrintDebug("Ustawiono rozmiar pozycji: Button2 (" + DoubleToStringFormatted(Config.GetButton2Size()) + ")");
         }
         else if(buttonName == "Button3")
         {
             Config.SetPositionSize(Config.GetButton3Size());
+            Config.SetMagicNumber(0); // Resetuj magic number
             SetActiveButton("Button3");
             PrintDebug("Ustawiono rozmiar pozycji: Button3 (" + DoubleToStringFormatted(Config.GetButton3Size()) + ")");
+        }
+        // NOWA OBSŁUGA PRZYCISKU 007
+        else if(buttonName == "Button_007")
+        {
+            // Zapamiętaj poprzedni stan przed zmianą
+            previousPositionSize = Config.GetPositionSize();
+            previousMagicNumber = Config.GetMagicNumber();
+            previousActiveButton = GetActiveButton();
+            
+            // Ustaw nowe wartości dla 007
+            Config.SetPositionSize(Config.GetButton007Size());
+            Config.SetMagicNumber(007); // Ustaw magic number na 007
+            Config.SetTakeAction(true, "Magic007"); // Automatycznie aktywuj tryb akcji
+            SetActiveButton("Button_007");
+            PrintDebug("Ustawiono rozmiar pozycji: Button_007 (" + DoubleToStringFormatted(Config.GetButton007Size()) + ") z Magic Number: 007");
+            PrintDebug("Zapamiętano poprzedni stan: rozmiar=" + DoubleToStringFormatted(previousPositionSize) + ", magic=" + IntegerToString(previousMagicNumber) + ", przycisk=" + previousActiveButton);
+            PlaySoundSafe(Config.GetSoundOK()); // Odtwórz dźwięk potwierdzenia
         }
         else if(buttonName == "Button_BE")
         {
             Trading.ModifyStopLoss();
             PrintDebug("Wykonano modyfikację SL (Break Even)");
         }
+    }
+    
+    //+------------------------------------------------------------------+
+    //| Pobranie nazwy aktualnie aktywnego przycisku                     |
+    //+------------------------------------------------------------------+
+    string GetActiveButton()
+    {
+        if(ObjectGetInteger(0, "Button1", OBJPROP_STATE) == 1) return "Button1";
+        if(ObjectGetInteger(0, "Button2", OBJPROP_STATE) == 1) return "Button2";
+        if(ObjectGetInteger(0, "Button3", OBJPROP_STATE) == 1) return "Button3";
+        if(ObjectGetInteger(0, "Button_007", OBJPROP_STATE) == 1) return "Button_007";
+        return "Button1"; // Domyślny
     }
     
     //+------------------------------------------------------------------+
@@ -137,6 +181,7 @@ public:
         ObjectSetInteger(0, "Button1", OBJPROP_STATE, 0);
         ObjectSetInteger(0, "Button2", OBJPROP_STATE, 0);
         ObjectSetInteger(0, "Button3", OBJPROP_STATE, 0);
+        ObjectSetInteger(0, "Button_007", OBJPROP_STATE, 0); // DODAJ
         
         // Ustaw aktywny przycisk
         ObjectSetInteger(0, activeButton, OBJPROP_STATE, 1);
@@ -147,6 +192,13 @@ public:
     //+------------------------------------------------------------------+
     void HandleChartClick(long lparam, double dparam)
     {
+        // Sprawdzenie czy nie kliknięto niedawno przycisku (zabezpieczenie przed podwójnym kliknięciem)
+        if(TimeCurrent() - lastButtonClickTime < 1)
+        {
+            PrintDebug("Ignoruję kliknięcie na wykresie - niedawno kliknięto przycisk");
+            return;
+        }
+        
         datetime time;
         double price_on_click;
         int subwindow;
@@ -250,6 +302,15 @@ public:
         if(success)
         {
             Config.SetTakeAction(false);
+            
+            // Jeśli używano przycisku 007, przywróć poprzedni stan
+            if(Config.GetMagicNumber() == 007)
+            {
+                Config.SetPositionSize(previousPositionSize);
+                Config.SetMagicNumber(previousMagicNumber);
+                SetActiveButton(previousActiveButton);
+                PrintDebug("Przywrócono poprzedni stan po użyciu przycisku 007: rozmiar=" + DoubleToStringFormatted(previousPositionSize) + ", magic=" + IntegerToString(previousMagicNumber) + ", przycisk=" + previousActiveButton);
+            }
         }
     }
     
@@ -278,6 +339,22 @@ public:
                 Config.SetPositionSize(Config.GetButton3Size());
                 SetActiveButton("Button3");
                 Config.SetTakeAction(true, "Size3");
+                break;
+                
+            // Klawisz 7 - aktywacja przycisku 007
+            case 55: // Klawisz 7
+                // Zapamiętaj poprzedni stan przed zmianą
+                previousPositionSize = Config.GetPositionSize();
+                previousMagicNumber = Config.GetMagicNumber();
+                previousActiveButton = GetActiveButton();
+                
+                Config.SetPositionSize(Config.GetButton007Size());
+                Config.SetMagicNumber(007);
+                Config.SetTakeAction(true, "Magic007_Key");
+                SetActiveButton("Button_007");
+                PlaySoundSafe(Config.GetSoundOK());
+                PrintDebug("Aktywowano przycisk 007 klawiszem 7");
+                PrintDebug("Zapamiętano poprzedni stan: rozmiar=" + DoubleToStringFormatted(previousPositionSize) + ", magic=" + IntegerToString(previousMagicNumber) + ", przycisk=" + previousActiveButton);
                 break;
                 
             // Klawisz C - aktywacja/deaktywacja buy limit
@@ -381,6 +458,7 @@ public:
     {
         string info = "=== STATUS EA ===\n";
         info += "Rozmiar pozycji: " + DoubleToStringFormatted(Config.GetPositionSize()) + "\n";
+        info += "Magic Number: " + IntegerToString(Config.GetMagicNumber()) + "\n"; // DODAJ
         info += "Tryb akcji: " + BoolToString(Config.GetTakeAction()) + "\n";
         info += "Setup: " + Config.GetCurrentSetup() + "\n";
         info += "Tryb rysowania: " + BoolToString(Config.GetDrawingMode()) + "\n";
@@ -401,6 +479,7 @@ public:
         ObjectSetString(0, "Button1", OBJPROP_TEXT, DoubleToStringFormatted(Config.GetDefaultSize()));
         ObjectSetString(0, "Button2", OBJPROP_TEXT, DoubleToStringFormatted(Config.GetButton2Size()));
         ObjectSetString(0, "Button3", OBJPROP_TEXT, DoubleToStringFormatted(Config.GetButton3Size()));
+        ObjectSetString(0, "Button_007", OBJPROP_TEXT, "?? " + DoubleToStringFormatted(Config.GetButton007Size())); // DODAJ
     }
     
     //+------------------------------------------------------------------+
@@ -421,6 +500,7 @@ public:
             ObjectSetInteger(0, "Button1", OBJPROP_BORDER_COLOR, clrRed);
             ObjectSetInteger(0, "Button2", OBJPROP_BORDER_COLOR, clrRed);
             ObjectSetInteger(0, "Button3", OBJPROP_BORDER_COLOR, clrRed);
+            ObjectSetInteger(0, "Button_007", OBJPROP_BORDER_COLOR, clrRed); // DODAJ
         }
         else
         {
@@ -428,6 +508,7 @@ public:
             ObjectSetInteger(0, "Button1", OBJPROP_BORDER_COLOR, clrBlue);
             ObjectSetInteger(0, "Button2", OBJPROP_BORDER_COLOR, clrBlue);
             ObjectSetInteger(0, "Button3", OBJPROP_BORDER_COLOR, clrBlue);
+            ObjectSetInteger(0, "Button_007", OBJPROP_BORDER_COLOR, clrBlue); // DODAJ
         }
     }
     
@@ -439,6 +520,7 @@ public:
         ObjectDelete(0, "Button1");
         ObjectDelete(0, "Button2");
         ObjectDelete(0, "Button3");
+        ObjectDelete(0, "Button_007"); // DODAJ
         ObjectDelete(0, "Button_BE");
         
         // Usuń wszystkie półproste
@@ -456,7 +538,8 @@ public:
     bool IsButtonClick(string objectName)
     {
         return (objectName == "Button1" || objectName == "Button2" || 
-                objectName == "Button3" || objectName == "Button_BE");
+                objectName == "Button3" || objectName == "Button_007" || // DODAJ
+                objectName == "Button_BE");
     }
     
     //+------------------------------------------------------------------+

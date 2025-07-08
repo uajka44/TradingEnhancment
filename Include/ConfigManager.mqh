@@ -18,6 +18,7 @@ input int      tp = 50;                                    // Take Profit (w pun
 input double   default_size = 0.1;                         // Domyślny rozmiar pozycji
 input double   button2_size = 0.1;                         // Rozmiar pozycji dla przycisku 2
 input double   button3_size = 2;                           // Rozmiar pozycji dla przycisku 3
+input double   button_007_size = 0.01;                     // Rozmiar pozycji dla przycisku 007
 input double   market_order_size_multiplier = 0.5;         // Mnożnik rozmiaru dla zleceń market
 
 // === PARAMETRY STOP LOSS ===
@@ -46,6 +47,7 @@ bool           take_action = false;                        // Flaga aktywacji ak
 string         setup = "";                                 // Aktualny setup tradingowy
 double         position_size = 0.1;                        // Aktualny rozmiar pozycji
 datetime       przerwa_do = 0;                            // Data zakazu tradingu (zabezpieczenie)
+int            current_magic_number = 0;                   // Aktualny magic number
 
 // === ZARZĄDZANIE TICKETAMI ===
 int            tickets[10];                                // Tablica przetworzonych ticketów
@@ -283,9 +285,10 @@ public:
     {
         PrintDebug("=== KONFIGURACJA EA ===");
         PrintDebug("SL/TP: " + IntegerToString(sl) + "/" + IntegerToString(tp));
-        PrintDebug("Rozmiary pozycji (1/2/3): " + DoubleToStringFormatted(default_size) + 
+        PrintDebug("Rozmiary pozycji (1/2/3/007): " + DoubleToStringFormatted(default_size) + 
                   "/" + DoubleToStringFormatted(button2_size) + 
-                  "/" + DoubleToStringFormatted(button3_size));
+                  "/" + DoubleToStringFormatted(button3_size) + 
+                  "/" + DoubleToStringFormatted(button_007_size));
         PrintDebug("Mnożnik market: " + DoubleToStringFormatted(market_order_size_multiplier));
         PrintDebug("BE parametry: " + DoubleToStringFormatted(ile_pkt_be) + 
                   "/" + IntegerToString(o_ile_przesunac_be));
@@ -307,7 +310,7 @@ public:
             isValid = false;
         }
         
-        if(default_size <= 0 || button2_size <= 0 || button3_size <= 0)
+        if(default_size <= 0 || button2_size <= 0 || button3_size <= 0 || button_007_size <= 0)
         {
             LogError("Rozmiary pozycji muszą być większe od 0", "ValidateConfiguration");
             isValid = false;
@@ -370,6 +373,25 @@ public:
     ENUM_HISTORY_SORT GetHistorySort() { return InpHistorySort; }
     datetime GetStartDate() { return StartDate; }
     string GetOrderDataFile() { return filename; }
+    
+    //+------------------------------------------------------------------+
+    //| Pobranie rozmiaru pozycji dla przycisku 007                      |
+    //+------------------------------------------------------------------+
+    double GetButton007Size() { return button_007_size; }
+    
+    //+------------------------------------------------------------------+
+    //| Ustawienie magic number                                          |
+    //+------------------------------------------------------------------+
+    void SetMagicNumber(int magic)
+    {
+        current_magic_number = magic;
+        PrintDebug("Ustawiono magic number: " + IntegerToString(magic));
+    }
+    
+    //+------------------------------------------------------------------+
+    //| Pobranie aktualnego magic number                                 |
+    //+------------------------------------------------------------------+
+    int GetMagicNumber() { return current_magic_number; }
     
     //+------------------------------------------------------------------+
     //| Cleanup przy zamknięciu                                         |

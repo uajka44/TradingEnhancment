@@ -31,7 +31,7 @@ public:
         if(m_initialized) return true;
         
         // Konfiguracja obiektu CTrade
-        trade.SetExpertMagicNumber(0);
+        // Magic number będzie ustawiany dynamicznie przez Config.GetMagicNumber()
         trade.SetMarginMode();
         trade.SetTypeFillingBySymbol(_Symbol);
         
@@ -84,6 +84,9 @@ public:
             return false;
         }
         
+        // Ustawienie magic number
+        trade.SetExpertMagicNumber(Config.GetMagicNumber());
+        
         bool result = trade.BuyLimit(
             volume,
             price,
@@ -127,6 +130,9 @@ public:
             LogError("Nieprawidłowy poziom SL dla Sell Limit", "ExecuteSellLimit");
             return false;
         }
+        
+        // Ustawienie magic number
+        trade.SetExpertMagicNumber(Config.GetMagicNumber());
         
         bool result = trade.SellLimit(
             volume,
