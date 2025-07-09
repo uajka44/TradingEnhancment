@@ -319,6 +319,7 @@ public:
     //+------------------------------------------------------------------+
     void HandleKeyPress(long lparam)
     {
+        PrintDebug("HandleKeyPress wywołane z kodem klawisza: " + IntegerToString((int)lparam));
         switch((int)lparam)
         {
             // Klawisz 1 - aktywacja trybu rysowania półprostej
@@ -399,6 +400,12 @@ public:
             // Klawisz T - usunięcie wszystkich zleceń oczekujących
             case 84:
                 Trading.DeleteAllPendingOrders();
+                break;
+                
+            // Klawisz R - ustawienie TP na +0.5 punktu od ceny otwarcia
+            case 82: // Klawisz R
+                PrintDebug("=== KLAWISZ R NACIŚNIĘTY w UIManager ===");
+                Trading.SetTPToHalfPoint();
                 break;
                 
             // Klawisz D - usuwanie linii (pojedynczo lub wszystkie)

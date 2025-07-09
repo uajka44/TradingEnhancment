@@ -155,24 +155,21 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
                 }
             }
             
-            // TEST: Klawisz R - odczyt ostatnich 3 pozycji
-            else if((int)lparam == 82) // Klawisz R
-            {
-                if(Database.IsDatabaseReady())
-                {
-                    Database.TestReadLastPositions();
-                }
-                else
-                {
-                    LogError("Baza danych nie jest gotowa", "OnChartEvent");
-                    Database.TestDatabaseStatus();
-                }
-            }
+            // USUNIĘTO: Klawisz R - teraz obsługiwany przez UIManager
+            // Klawisz R służy do ustawiania TP na +0.5 punktu od ceny otwarcia
+            // (obsługa przeniesiona do UIManager.HandleKeyPress)
             
             // TEST: Klawisz G - status bazy danych (zmienione z D, żeby nie kolidowało)
             else if((int)lparam == 71) // Klawisz G  
             {
                 Database.TestDatabaseStatus();
+            }
+            
+            // TEST: Klawisz Y - test funkcji TP bezpośrednio
+            else if((int)lparam == 89) // Klawisz Y
+            {
+                PrintDebug("=== TEST KLAWISZA Y: Wywołanie SetTPToHalfPoint() bezpośrednio ===");
+                Trading.SetTPToHalfPoint();
             }
             
             break;

@@ -66,6 +66,7 @@ TraderEnhancementPro/
 - `C` - aktywacja/deaktywacja trybu akcji
 - `B,S` - Buy/Sell Market
 - `E,F` - modyfikacja SL/TP
+- `R` - ustawienie TP na +0.5 punktu od ceny otwarcia
 - `Q` - zamknięcie ostatniej pozycji
 - `T` - usunięcie zleceń oczekujących
 - `D` - usuwanie linii
