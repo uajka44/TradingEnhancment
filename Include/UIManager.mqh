@@ -146,10 +146,10 @@ public:
             
             // Ustaw nowe wartości dla 007
             Config.SetPositionSize(Config.GetButton007Size());
-            Config.SetMagicNumber(007); // Ustaw magic number na 007
+            Config.SetMagicNumber(7); // Ustaw magic number na 7 (nie 007)
             Config.SetTakeAction(true, "Magic007"); // Automatycznie aktywuj tryb akcji
             SetActiveButton("Button_007");
-            PrintDebug("Ustawiono rozmiar pozycji: Button_007 (" + DoubleToStringFormatted(Config.GetButton007Size()) + ") z Magic Number: 007");
+            PrintDebug("Ustawiono rozmiar pozycji: Button_007 (" + DoubleToStringFormatted(Config.GetButton007Size()) + ") z Magic Number: 7");
             PrintDebug("Zapamiętano poprzedni stan: rozmiar=" + DoubleToStringFormatted(previousPositionSize) + ", magic=" + IntegerToString(previousMagicNumber) + ", przycisk=" + previousActiveButton);
             PlaySoundSafe(Config.GetSoundOK()); // Odtwórz dźwięk potwierdzenia
         }
@@ -304,12 +304,18 @@ public:
             Config.SetTakeAction(false);
             
             // Jeśli używano przycisku 007, przywróć poprzedni stan
-            if(Config.GetMagicNumber() == 007)
+            if(Config.GetMagicNumber() == 7)
             {
                 Config.SetPositionSize(previousPositionSize);
                 Config.SetMagicNumber(previousMagicNumber);
                 SetActiveButton(previousActiveButton);
                 PrintDebug("Przywrócono poprzedni stan po użyciu przycisku 007: rozmiar=" + DoubleToStringFormatted(previousPositionSize) + ", magic=" + IntegerToString(previousMagicNumber) + ", przycisk=" + previousActiveButton);
+            }
+            // Dla pozostałych przypadków - resetuj magic number na 0
+            else
+            {
+                Config.SetMagicNumber(0);
+                PrintDebug("Zresetowano magic number na 0 po wykonaniu zlecenia");
             }
         }
     }
@@ -350,16 +356,17 @@ public:
                 previousActiveButton = GetActiveButton();
                 
                 Config.SetPositionSize(Config.GetButton007Size());
-                Config.SetMagicNumber(007);
+                Config.SetMagicNumber(7); // Ustaw magic number na 7 (nie 007)
                 Config.SetTakeAction(true, "Magic007_Key");
                 SetActiveButton("Button_007");
                 PlaySoundSafe(Config.GetSoundOK());
-                PrintDebug("Aktywowano przycisk 007 klawiszem 7");
+                PrintDebug("Aktywowano przycisk 007 klawiszem 7 z Magic Number: 7");
                 PrintDebug("Zapamiętano poprzedni stan: rozmiar=" + DoubleToStringFormatted(previousPositionSize) + ", magic=" + IntegerToString(previousMagicNumber) + ", przycisk=" + previousActiveButton);
                 break;
                 
             // Klawisz C - aktywacja/deaktywacja buy limit
             case 67:
+                Config.SetMagicNumber(0); // Ustaw magic number na 0
                 if(Config.GetTakeAction())
                 {
                     Config.SetTakeAction(false);
@@ -368,18 +375,25 @@ public:
                 {
                     Config.SetTakeAction(true, "Manual");
                 }
+                PrintDebug("Klawisz C: ustawiono magic number na 0");
                 break;
                 
             // Klawisz B - BUY market
             case 66:
+                Config.SetMagicNumber(2); // Ustaw magic number na 2
                 Trading.DeleteAllPendingOrders();
                 Trading.ExecuteBuyMarket();
+                Config.SetMagicNumber(0); // Resetuj magic number po wykonaniu
+                PrintDebug("Klawisz B: wykonano Buy Market z magic number 2, zresetowano na 0");
                 break;
                 
             // Klawisz S - SELL market
             case 83:
+                Config.SetMagicNumber(3); // Ustaw magic number na 3
                 Trading.DeleteAllPendingOrders();
                 Trading.ExecuteSellMarket();
+                Config.SetMagicNumber(0); // Resetuj magic number po wykonaniu
+                PrintDebug("Klawisz S: wykonano Sell Market z magic number 3, zresetowano na 0");
                 break;
                 
             // Klawisz E - przesunięcie BE

@@ -373,6 +373,8 @@ public:
         }
     }
     
+
+    
     //+------------------------------------------------------------------+
     //| Ustawienie Take Profit na +0.5 punktu od ceny otwarcia          |
     //+------------------------------------------------------------------+
@@ -419,99 +421,7 @@ public:
             }
         }
     }
-    
-    //+------------------------------------------------------------------+
-    //| Ustawienie Take Profit na +0.5 punktu od ceny otwarcia          |
-    //+------------------------------------------------------------------+
-    void SetTPToHalfPoint()
-    {
-        PrintDebug("=== KLAWISZ R: Rozpoczynam ustawianie TP na +0.5 punktu ===");
-        
-        int positions_count = PositionsTotal();
-        PrintDebug("Liczba pozycji: " + IntegerToString(positions_count));
-        
-        if(positions_count == 0)
-        {
-            PrintDebug("BRAK POZYCJI - nie ma nic do modyfikacji");
-            return;
-        }
-        
-        for(int i = positions_count - 1; i >= 0; i--)
-        {
-            ulong ticket = PositionGetTicket(i);
-            PrintDebug("Przetwarzam pozycję " + IntegerToString(i+1) + "/" + IntegerToString(positions_count) + ", ticket: " + IntegerToString(ticket));
-            
-            if(PositionSelectByTicket(ticket))
-            {
-                string symbol = PositionGetString(POSITION_SYMBOL);
-                double cena_otwarcia = PositionGetDouble(POSITION_PRICE_OPEN);
-                double current_tp = PositionGetDouble(POSITION_TP);
-                double current_sl = PositionGetDouble(POSITION_SL);
-                ENUM_POSITION_TYPE pos_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-                string type_str = (pos_type == POSITION_TYPE_BUY) ? "BUY" : "SELL";
-                
-                PrintDebug("Pozycja: " + symbol + " " + type_str + ", otwarcie: " + DoubleToString(cena_otwarcia, _Digits) + 
-                          ", obecny TP: " + DoubleToString(current_tp, _Digits) + 
-                          ", obecny SL: " + DoubleToString(current_sl, _Digits));
-                
-                double new_tp = 0;
-                
-                if(pos_type == POSITION_TYPE_BUY)
-                {
-                    // Dla BUY: TP = cena otwarcia + 0.5 punktu
-                    new_tp = cena_otwarcia + 0.5;
-                    PrintDebug("Obliczony nowy TP dla BUY: " + DoubleToString(new_tp, _Digits));
-                }
-                else if(pos_type == POSITION_TYPE_SELL)
-                {
-                    // Dla SELL: TP = cena otwarcia - 0.5 punktu  
-                    new_tp = cena_otwarcia - 0.5;
-                    PrintDebug("Obliczony nowy TP dla SELL: " + DoubleToString(new_tp, _Digits));
-                }
-                
-                // Normalizuj cenę do odpowiedniej liczby miejsc dziesiętnych
-                new_tp = NormalizeDouble(new_tp, _Digits);
-                PrintDebug("Znormalizowany nowy TP: " + DoubleToString(new_tp, _Digits));
-                
-                // Sprawdzenie czy nowy TP różni się od obecnego
-                if(MathAbs(new_tp - current_tp) < _Point)
-                {
-                    PrintDebug("POMINIĘTO - TP już ustawiony na żądaną wartość");
-                    continue;
-                }
-                
-                PrintDebug("Próba modyfikacji pozycji: ticket=" + IntegerToString(ticket) + 
-                          ", SL=" + DoubleToString(current_sl, _Digits) + 
-                          ", nowy TP=" + DoubleToString(new_tp, _Digits));
-                
-                // Ustawienie magic number przed modyfikacją
-                trade.SetExpertMagicNumber(Config.GetMagicNumber());
-                
-                if(trade.PositionModify(ticket, current_sl, new_tp))
-                {
-                    PrintDebug("SUKCES: TP ustawiony na +0.5 punktu od otwarcia dla ticket: " + IntegerToString(ticket) + 
-                              " (otwarcie: " + DoubleToString(cena_otwarcia, _Digits) + 
-                              ", nowy TP: " + DoubleToString(new_tp, _Digits) + ")");
-                    PlaySoundSafe(Config.GetSoundOK());
-                }
-                else
-                {
-                    uint error_code = trade.ResultRetcode();
-                    string error_desc = trade.ResultRetcodeDescription();
-                    LogError("BŁĄD ustawiania TP na +0.5: kod=" + IntegerToString(error_code) + 
-                            ", opis: " + error_desc, "SetTPToHalfPoint");
-                    PrintDebug("Szczegóły błędu: ticket=" + IntegerToString(ticket) + 
-                              ", próbowany TP=" + DoubleToString(new_tp, _Digits));
-                }
-            }
-            else
-            {
-                LogError("Nie można wybrać pozycji ticket: " + IntegerToString(ticket), "SetTPToHalfPoint");
-            }
-        }
-        
-        PrintDebug("=== KLAWISZ R: Zakończono ustawianie TP na +0.5 punktu ===");
-    }
+
     
     //+------------------------------------------------------------------+
     //| Usunięcie wszystkich zleceń oczekujących                         |
