@@ -373,52 +373,7 @@ public:
         }
     }
     
-    //+------------------------------------------------------------------+
-    //| Ustawienie Take Profit na +0.5 punktu od ceny otwarcia          |
-    //+------------------------------------------------------------------+
-    void SetTPToHalfPoint()
-    {
-        int positions_count = PositionsTotal();
-        PrintDebug("Ustawianie TP na +0.5 punktu od otwarcia dla " + IntegerToString(positions_count) + " pozycji");
-        
-        for(int i = positions_count - 1; i >= 0; i--)
-        {
-            ulong ticket = PositionGetTicket(i);
-            
-            if(PositionSelectByTicket(ticket))
-            {
-                double cena_otwarcia = PositionGetDouble(POSITION_PRICE_OPEN);
-                ENUM_POSITION_TYPE pos_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-                double new_tp = 0;
-                
-                if(pos_type == POSITION_TYPE_BUY)
-                {
-                    // Dla BUY: TP = cena otwarcia + 0.5 punktu
-                    new_tp = cena_otwarcia + 0.5;
-                }
-                else if(pos_type == POSITION_TYPE_SELL)
-                {
-                    // Dla SELL: TP = cena otwarcia - 0.5 punktu  
-                    new_tp = cena_otwarcia - 0.5;
-                }
-                
-                // Normalizuj cenę do odpowiedniej liczby miejsc dziesiętnych
-                new_tp = NormalizeDouble(new_tp, _Digits);
-                
-                if(trade.PositionModify(ticket, PositionGetDouble(POSITION_SL), new_tp))
-                {
-                    PrintDebug("TP ustawiony na +0.5 punktu od otwarcia dla ticket: " + IntegerToString(ticket) + 
-                              " (otwarcie: " + DoubleToString(cena_otwarcia, _Digits) + 
-                              ", nowy TP: " + DoubleToString(new_tp, _Digits) + ")");
-                    PlaySoundSafe(Config.GetSoundOK());
-                }
-                else
-                {
-                    LogError("Błąd ustawiania TP na +0.5: " + trade.ResultRetcodeDescription(), "SetTPToHalfPoint");
-                }
-            }
-        }
-    }
+
     
     //+------------------------------------------------------------------+
     //| Ustawienie Take Profit na +0.5 punktu od ceny otwarcia          |

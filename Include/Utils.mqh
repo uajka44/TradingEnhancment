@@ -299,7 +299,7 @@ datetime ReadDateFromCSVSafe(string filename)
     
     if(!FileExists(filename))
     {
-        LogError("File not found: " + filename, "ReadDateFromCSVSafe");
+        // LogError("File not found: " + filename, "ReadDateFromCSVSafe");
         return 0;
     }
     
