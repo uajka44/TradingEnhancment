@@ -38,6 +38,19 @@ input ENUM_HISTORY_SORT InpHistorySort = HISTORY_SORT_OPENTIME; // Sortowanie po
 input string   Symbols = "US100.cash,US30.cash,XAUUSD,GER40.cash"; // Instrumenty do eksportu
 input datetime StartDate = D'2025.05.01 00:00';           // Data początkowa dla eksportu
 
+// === SKRÓTY KLAWISZOWE (kody ASCII) ===
+input string   key_size2 = "2";                            // Klawisz: Rozmiar pozycji 2 + aktywacja
+input string   key_size3 = "3";                            // Klawisz: Rozmiar pozycji 3 + aktywacja
+input string   key_007 = "7";                              // Klawisz: Aktywacja przycisku 007
+input string   key_buy_market = "B";                       // Klawisz: Buy Market
+input string   key_toggle_limit = "C";                     // Klawisz: Aktywacja/deaktywacja limit
+input string   key_modify_be = "E";                        // Klawisz: Przesunięcie BE
+input string   key_modify_tp = "F";                        // Klawisz: Przesunięcie TP
+input string   key_close_last = "Q";                       // Klawisz: Zamknięcie ostatniej pozycji
+input string   key_tp_half_point = "R";                    // Klawisz: TP na +0.5 punktu
+input string   key_sell_market = "S";                      // Klawisz: Sell Market
+input string   key_delete_pending = "T";                   // Klawisz: Usunięcie zleceń oczekujących
+
 //+------------------------------------------------------------------+
 //| ZMIENNE GLOBALNE - STAN APLIKACJI                               |
 //+------------------------------------------------------------------+
@@ -55,16 +68,6 @@ int            ticket_count = 0;                          // Liczba ticketów w 
 
 // === TIMER I INTERWAŁY ===
 int            timerInterval = 10;                         // Interwał timera w sekundach
-
-// === RYSOWANIE LINII ===
-bool           isDrawingMode = false;                      // Tryb rysowania półprostych
-int            clickCount = 0;                            // Licznik kliknięć
-datetime       time1, time2;                              // Czasy dla punktów linii
-double         price1, price2;                            // Ceny dla punktów linii
-string         rayName = "AutoRay";                       // Prefix nazwy linii
-int            rayCounter = 1;                            // Licznik linii
-datetime       lastDeleteKeyPress = 0;                    // Ostatnie naciśnięcie Delete
-bool           deleteAllMode = false;                      // Tryb usuwania wszystkich linii
 
 // === BAZA DANYCH ===
 bool           databaseReady = false;                      // Status gotowości bazy danych
@@ -101,17 +104,11 @@ public:
         if(m_initialized) return true;
         
         // Inicjalizacja zmiennych globalnych
-        position_size = default_size; // Ustaw domyślny rozmiar z parametru input
+        position_size = default_size;
         take_action = false;
         setup = "";
         przerwa_do = 0;
         ticket_count = 0;
-        
-        // Inicjalizacja rysowania
-        isDrawingMode = false;
-        clickCount = 0;
-        rayCounter = 1;
-        deleteAllMode = false;
         
         // Wczytanie daty przerwy z pliku
         LoadPrzerwaDo();
@@ -151,7 +148,6 @@ public:
     void LoadPrzerwaDo()
     {
         przerwa_do = ReadDateFromCSVSafe(przerwa_filename);
-        // Usunięto debug print - wyświetlany będzie tylko w statusie EA
     }
     
     //+------------------------------------------------------------------+
@@ -159,7 +155,7 @@ public:
     //+------------------------------------------------------------------+
     bool IsTradingBlocked()
     {
-        LoadPrzerwaDo(); // Odświeżamy datę z pliku
+        LoadPrzerwaDo();
         return (przerwa_do > TimeCurrent());
     }
     
@@ -196,6 +192,7 @@ public:
     double GetButton2Size() { return button2_size; }
     double GetButton3Size() { return button3_size; }
     double GetDefaultSize() { return default_size; }
+    double GetButton007Size() { return button_007_size; }
     
     //+------------------------------------------------------------------+
     //| Pobranie rozmiaru pozycji dla zleceń market                      |
@@ -226,22 +223,6 @@ public:
     
     bool GetTakeAction() { return take_action; }
     string GetCurrentSetup() { return setup; }
-    
-    //+------------------------------------------------------------------+
-    //| Zarządzanie trybem rysowania                                     |
-    //+------------------------------------------------------------------+
-    void SetDrawingMode(bool mode)
-    {
-        isDrawingMode = mode;
-        if(mode)
-        {
-            clickCount = 0;
-            PlaySoundSafe(dzwiek_ok);
-            PrintDebug("Aktywowano tryb rysowania");
-        }
-    }
-    
-    bool GetDrawingMode() { return isDrawingMode; }
     
     //+------------------------------------------------------------------+
     //| Zarządzanie ticketami                                           |
@@ -277,6 +258,29 @@ public:
     //+------------------------------------------------------------------+
     string GetSoundOK() { return dzwiek_ok; }
     string GetSoundWarning() { return dzwiek_2; }
+    
+    //+------------------------------------------------------------------+
+    //| Pobranie kodów klawiszy ze stringów                             |
+    //+------------------------------------------------------------------+
+    int GetKeyCode(string key)
+    {
+        if(StringLen(key) == 0) return 0;
+        string upperKey = key;
+        StringToUpper(upperKey);
+        return StringGetCharacter(upperKey, 0);
+    }
+    
+    int GetKeySize2() { return GetKeyCode(key_size2); }
+    int GetKeySize3() { return GetKeyCode(key_size3); }
+    int GetKey007() { return GetKeyCode(key_007); }
+    int GetKeyBuyMarket() { return GetKeyCode(key_buy_market); }
+    int GetKeyToggleLimit() { return GetKeyCode(key_toggle_limit); }
+    int GetKeyModifyBE() { return GetKeyCode(key_modify_be); }
+    int GetKeyModifyTP() { return GetKeyCode(key_modify_tp); }
+    int GetKeyCloseLast() { return GetKeyCode(key_close_last); }
+    int GetKeyTPHalfPoint() { return GetKeyCode(key_tp_half_point); }
+    int GetKeySellMarket() { return GetKeyCode(key_sell_market); }
+    int GetKeyDeletePending() { return GetKeyCode(key_delete_pending); }
     
     //+------------------------------------------------------------------+
     //| Informacje o konfiguracji (debug)                               |
@@ -332,31 +336,6 @@ public:
     }
     
     //+------------------------------------------------------------------+
-    //| Gettery dla zmiennych rysowania                                 |
-    //+------------------------------------------------------------------+
-    int GetClickCount() { return clickCount; }
-    void SetClickCount(int count) { clickCount = count; }
-    void IncrementClickCount() { clickCount++; }
-    
-    datetime GetTime1() { return time1; }
-    double GetPrice1() { return price1; }
-    void SetPoint1(datetime t, double p) { time1 = t; price1 = p; }
-    
-    datetime GetTime2() { return time2; }
-    double GetPrice2() { return price2; }
-    void SetPoint2(datetime t, double p) { time2 = t; price2 = p; }
-    
-    string GetNextRayName() 
-    { 
-        string name = rayName + IntegerToString(rayCounter);
-        rayCounter++;
-        return name;
-    }
-    
-    void DecrementRayCounter() { if(rayCounter > 1) rayCounter--; }
-    int GetRayCounter() { return rayCounter; }
-    
-    //+------------------------------------------------------------------+
     //| Gettery dla tablicy symboli                                     |
     //+------------------------------------------------------------------+
     int GetSymbolsCount() { return ArraySize(symbolArray); }
@@ -373,11 +352,6 @@ public:
     ENUM_HISTORY_SORT GetHistorySort() { return InpHistorySort; }
     datetime GetStartDate() { return StartDate; }
     string GetOrderDataFile() { return filename; }
-    
-    //+------------------------------------------------------------------+
-    //| Pobranie rozmiaru pozycji dla przycisku 007                      |
-    //+------------------------------------------------------------------+
-    double GetButton007Size() { return button_007_size; }
     
     //+------------------------------------------------------------------+
     //| Ustawienie magic number                                          |
