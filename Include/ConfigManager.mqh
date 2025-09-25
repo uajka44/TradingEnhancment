@@ -169,7 +169,7 @@ public:
     string GetPrzerrwaDoString()
     {
         if(przerwa_do > 0)
-            return TimeToString(przerwa_do, TIME_DATE|TIME_MINUTES);
+            return TimeToString(przerwa_do, TIME_DATE|TIME_MINUTES|TIME_SECONDS);
         return "Brak";
     }
     

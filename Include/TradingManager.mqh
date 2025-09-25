@@ -519,16 +519,42 @@ public:
     }
     
     //+------------------------------------------------------------------+
-    //| Zamknięcie ostatniej pozycji                                    |
+    //| Zamknięcie ostatniej pozycji dla aktualnego symbolu             |
     //+------------------------------------------------------------------+
     void CloseLastPosition()
     {
-        if(PositionsTotal() > 0)
+        int positions_count = PositionsTotal();
+        ulong last_ticket = 0;
+        datetime last_time = 0;
+        
+        // Znajdź ostatnią pozycję dla aktualnego symbolu
+        for(int i = 0; i < positions_count; i++)
         {
-            ulong ticket = PositionGetTicket(0);
-            if(trade.PositionClose(ticket))
+            ulong ticket = PositionGetTicket(i);
+            if(PositionSelectByTicket(ticket))
             {
-                PrintDebug("Zamknięto ostatnią pozycję: " + IntegerToString(ticket));
+                string symbol = PositionGetString(POSITION_SYMBOL);
+                datetime open_time = (datetime)PositionGetInteger(POSITION_TIME);
+                
+                // Sprawdź czy pozycja jest dla aktualnego symbolu
+                if(symbol == _Symbol)
+                {
+                    // Szukamy pozycji z najnowszym czasem otwarcia
+                    if(open_time > last_time)
+                    {
+                        last_time = open_time;
+                        last_ticket = ticket;
+                    }
+                }
+            }
+        }
+        
+        // Zamknij znalezioną pozycję
+        if(last_ticket > 0)
+        {
+            if(trade.PositionClose(last_ticket))
+            {
+                PrintDebug("Zamknięto ostatnią pozycję dla " + _Symbol + ": " + IntegerToString(last_ticket));
             }
             else
             {
@@ -537,7 +563,7 @@ public:
         }
         else
         {
-            PrintDebug("Brak pozycji do zamknięcia");
+            PrintDebug("Brak pozycji do zamknięcia dla symbolu: " + _Symbol);
         }
     }
     

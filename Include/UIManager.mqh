@@ -463,19 +463,9 @@ public:
     //+------------------------------------------------------------------+
     void ShowStatusInfo()
     {
-        string info = "=== STATUS EA ===\n";
-        info += "Rozmiar pozycji: " + DoubleToStringFormatted(Config.GetPositionSize()) + "\n";
-        info += "Magic Number: " + IntegerToString(Config.GetMagicNumber()) + "\n"; // DODAJ
-        info += "Tryb akcji: " + BoolToString(Config.GetTakeAction()) + "\n";
-        info += "Setup: " + Config.GetCurrentSetup() + "\n";
-        info += "Tryb rysowania: " + BoolToString(Config.GetDrawingMode()) + "\n";
-        info += "Trading zablokowany: " + BoolToString(Config.IsTradingBlocked()) + "\n";
-        info += "Data przerwy: " + Config.GetPrzerrwaDoString() + "\n";
-        info += "\n" + Trading.GetPositionsInfo();
+        string info = "Data przerwy: " + Config.GetPrzerrwaDoString();
         
         Comment(info);
-        // Uwaga: Rozmiar czcionki komentarza można zmienić tylko ręcznie w ustawieniach MT5
-        // Properties -> Fonts -> Comments -> Font Size
     }
     
     //+------------------------------------------------------------------+
